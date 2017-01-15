@@ -67,7 +67,6 @@ int isExists(const Term* searchTerm /*char* newTermStr*/){
     int found = 0;
     int cmp;
     List* keysInCurrentNode;
-    puts("@isExists");
     if(!treeNode || !treeNode->keys)
         return 0;
     
@@ -84,20 +83,16 @@ int isExists(const Term* searchTerm /*char* newTermStr*/){
             
             subTreePtr = list_get_next(treeNode->children);
             cmp = cmpTerms(searchTerm, term);
-            printf("cmp == %d, subtrr is %d.\n", cmp, subTreePtr?"valid":"Null" );
         }while( cmp>0 && list_has_next(treeNode->keys));    
         
         if(cmp == 0){
-            puts("found");
             found = 1;
         }
         else if(cmp <0){
             if(subTreePtr){
-                puts("dive leftward");
                 treeNode = (TreeNode*)subTreePtr->data;
             }
             else{
-                puts("search ended. no key in tree");
                 treeNode = NULL;
             }
             
@@ -105,12 +100,10 @@ int isExists(const Term* searchTerm /*char* newTermStr*/){
         else{
             subTreePtr = list_get_next(treeNode->children);
             if(subTreePtr){
-                puts("dive rightmost");
                 treeNode = (TreeNode*)subTreePtr->data;
             }
             else{
                 treeNode = NULL;
-                puts("search ended. no key in tree");
             }
         }
         

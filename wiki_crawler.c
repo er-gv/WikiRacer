@@ -51,47 +51,54 @@ int main(int argc, char* argv[]){
 List* findTermsChain(const char* beginTerm, const char* goalTerm, const unsigned maxSteps){
     
     int connectionStatus;
+    char buff[2501];
     Term* currentTerm;
     Term* firstTerm = makeTerm(strdup(beginTerm), 0, NULL);
     List* TermsChain = NULL;
-    connectionStatus = openWikiConnection();
-    puts("@findTermsChain");
+    buff[2500] = '\0';
+    
     initTermsQueue();
     initDictionary(30);
-    printQueue();
+    
     enqueueTerm(firstTerm);
     addTermToDictionary(firstTerm);    
     puts("entering the search queue loop...");
     printf("searching path from \"%s\" to \"%s\", %u steps max.\n", beginTerm, goalTerm, maxSteps);
-    printQueue();
+    
     
     
     while(!isEmptyQueue()){
         
         currentTerm = (Term*)getFirst();
         dequeueTerm();
-        printf("currentTerm->text == %s.\n",currentTerm->text);
+        //printf("currentTerm->text == %s.\n",currentTerm->text);
         if(strcmp(currentTerm->text,goalTerm)==0 && currentTerm->depth <= maxSteps){
             puts("Got Goal term!");
             TermsChain= buildTermsChain(currentTerm);
+           
             break;
         }
         else if (currentTerm->depth < maxSteps){
             processWikiPage(currentTerm, goalTerm); //extract links from the page. add them to the dictionary and queue
+            
+            
+            
+            
+            
+        //readFragmentOfWikiPage(buff, 2500);
+        //puts(buff);
+            
         }
         
         //break;
     }
-   
-    //puts("----------------");
-    //printQueue();
+    printQueue();
     disposeQueue();//free the memory used for the search queue
-    //printTermsLevelOrder();
     deleteDictionary();
     
     
+    freeTCPResources();
     
-    closeWikiConnection();
     puts("exit findTermsChain");
     return TermsChain;
 }

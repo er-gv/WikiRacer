@@ -14,7 +14,7 @@
 
 
 #include "wiki_socket.h"
-
+#define DEBUG_MODE 1
 typedef struct wiki_socket_t {
     int sockfd;
     struct addrinfo *servinfo;
@@ -25,9 +25,12 @@ typedef struct wiki_socket_t {
 
 
 static WikiSocket wikiSocket;
+static void logSSLError(int ret);
+static SSL_CTX* ssl_ctx = NULL;
 
 
-int initSocket(){
+
+static int initSocket(){
     
     int httpStatus;
     struct addrinfo hints;
@@ -63,11 +66,20 @@ int initSocket(){
     return httpStatus;
 }
 
-int initSSL(){
+static void initSSL(){
+    static int flag = 1;
+    if(flag>0){
+        flag--;
+        SSL_load_error_strings ();
+        SSL_library_init ();
+        ssl_ctx = SSL_CTX_new (SSLv23_client_method ());
+    }
+}
+
     
-    SSL_load_error_strings ();
-    SSL_library_init ();
-    wikiSocket.ssl_ctx = SSL_CTX_new (SSLv23_client_method ());
+int setupSSLConnection(){
+    initSSL();
+    wikiSocket.ssl_ctx = ssl_ctx;
     wikiSocket.sslConnection = SSL_new(wikiSocket.ssl_ctx);
     //bind the ssl to the socket
     SSL_set_connect_state(wikiSocket.sslConnection);
@@ -105,9 +117,11 @@ int openWikiConnection(){
     wikiSocket.sslConnection = NULL;
     
     status = initSocket();
+    printf("open socket status: %d.\n", status);
     if(status ==0){
-        status = initSSL();
-        if(status == 0 && DEBUG_MODE){
+        puts("Got TCP Socket. init SSL connection");
+        status = setupSSLConnection();
+        if(status == 1 && DEBUG_MODE){
             ShowCerts();
         }
     }
@@ -119,19 +133,28 @@ int fetchWikiPage(const char* search_term){
     char msg[1024];
    
     int bytesWritten, bytesLeft;
-    
+    int i=0;
     sprintf(msg, "GET /wiki/%s HTTP/1.0\r\nHost: %s\r\n\r\n", search_term, WIKI_HOST);
     msgLen = strlen(msg);
-    printf("Let\'s send %s \n", msg);
+    //printf("Let\'s send %s \n", msg);
     
     bytesWritten =0;
     bytesLeft= msgLen;
-    SSL_set_connect_state(wikiSocket.sslConnection);
-    SSL_set_fd(wikiSocket.sslConnection, wikiSocket.sockfd);
+    //SSL_set_connect_state(wikiSocket.sslConnection);
+    //SSL_set_fd(wikiSocket.sslConnection, wikiSocket.sockfd);
+    
     do{
         int bytes = SSL_write(wikiSocket.sslConnection, msg, bytesLeft); 
-        if(bytes< 0)
-            return -1;
+        i++;
+        //printf("called SSL_write %d times in order to send request %s\n", i, msg);
+        if(bytes< 0){
+            if(SSL_get_error(wikiSocket.sslConnection,bytes)!=SSL_ERROR_WANT_READ){
+                logSSLError(bytes);
+                return -1;
+            }
+            else
+                continue;
+        }
         bytesWritten+=bytes;
         bytesLeft -= bytes;
     }while(bytesLeft>0);
@@ -144,13 +167,15 @@ int readFragmentOfWikiPage(char* buffer, const unsigned int buffSize){
     
     int bytesRead = 0;
     int bytesLeft = buffSize; 
-    SSL_set_connect_state(wikiSocket.sslConnection);
+    //SSL_set_connect_state(wikiSocket.sslConnection);
     do{
         int bytes = SSL_read(wikiSocket.sslConnection, buffer, bytesLeft); 
        // printf("read %d bytes from socket.\n", bytes);
-        if(bytes<= 0)
+        if(bytes<= 0){
+             logSSLError(bytes);
             return -1;
-        puts(buffer);
+        }
+        //puts(buffer);
         bytesRead+=bytes;
         bytesLeft -= bytes;
     }while(bytesLeft>0);
@@ -158,11 +183,65 @@ int readFragmentOfWikiPage(char* buffer, const unsigned int buffSize){
     return bytesRead;
 }
 
+
+static void logSSLError(int ret){
+    switch (SSL_get_error(wikiSocket.sslConnection, ret)){
+        case SSL_ERROR_NONE:
+            puts("no SSL errors here. everything is OK");
+            break;
+            
+        case SSL_ERROR_ZERO_RETURN:
+            puts("The TLS/SSL connection has been closed");
+            break;
+            
+        case SSL_ERROR_WANT_READ:
+            puts("The operation did not complete; the same TLS/SSL Read function should be called again later.\nIf, by then, the underlying BIO has data available for reading then some TLS/SSL protocol progress will take place,\n i.e. at least part of an TLS/SSL record will be read.");
+            break;
+            
+        case SSL_ERROR_WANT_WRITE:
+            puts("The operation did not complete; the same TLS/SSL Write function should be called again later.\nIf, by then, the underlying BIO has data available for writing then some TLS/SSL protocol progress will take place,\n i.e. at least part of an TLS/SSL record will be written.");
+            break;
+            
+        case SSL_ERROR_WANT_CONNECT:
+            puts("The underlying BIO was not connected yet to the peer and the call would block in connect()/accept()");
+            break;
+            
+        case SSL_ERROR_WANT_ACCEPT:
+            puts("The underlying BIO was not connected yet to the peer and the call would block in connect()/accept()");
+            break;
+            
+        case SSL_ERROR_WANT_X509_LOOKUP:
+            puts("The operation did not complete because an application callback set by SSL_CTX_set_client_cert_cb()\nhas asked to be called again. The TLS/SSL I/O function should be called again later. Details depend on the application.");
+            break;
+            
+        case SSL_ERROR_SYSCALL:
+            puts("Some I/O error occurred.");
+            break;
+            
+        case SSL_ERROR_SSL:
+            puts("A failure in the SSL library occurred, usually a protocol error.\nThe OpenSSL error queue contains more information on the error.");
+            break;
+        
+        default:
+            puts("Unknown error occured.");
+    }
+}
+
 void closeWikiConnection(){
     
     
     SSL_free(wikiSocket.sslConnection);
+    //SSL_CTX_free(wikiSocket.ssl_ctx);
+    //freeaddrinfo(wikiSocket.servinfo); // free the linked-list
+    
+}
+
+void freeTCPResources(){
+    
+    
     SSL_CTX_free(wikiSocket.ssl_ctx);
     freeaddrinfo(wikiSocket.servinfo); // free the linked-list
     close(wikiSocket.sockfd); 
 }
+
+
