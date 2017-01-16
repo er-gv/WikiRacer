@@ -72,7 +72,7 @@ int processWikiPage(const Term* current_term, const char* goal_term){
         wiki_android_status = readFragmentOfWikiPage(wiki_android_response/*+wiki_android_reminderChars*sizeof(char)*/, HTML_FRAGMENT_LEN/*-wiki_android_reminderChars*/);
         //puts("done reading.");/*
         if(wiki_android_status <0){
-            fprintf(stderr, "failed to recive() http.\n");
+            //fprintf(stderr, "failed to recive() http.\n");
             return wiki_android_status;
         }
         //else{

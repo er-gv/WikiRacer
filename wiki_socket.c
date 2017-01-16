@@ -117,12 +117,12 @@ int openWikiConnection(){
     wikiSocket.sslConnection = NULL;
     
     status = initSocket();
-    printf("open socket status: %d.\n", status);
+    //printf("open socket status: %d.\n", status);
     if(status ==0){
-        puts("Got TCP Socket. init SSL connection");
+        //puts("Got TCP Socket. init SSL connection");
         status = setupSSLConnection();
         if(status == 1 && DEBUG_MODE){
-            ShowCerts();
+            //ShowCerts();
         }
     }
     return status;
